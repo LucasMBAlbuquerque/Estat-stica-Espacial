@@ -1,0 +1,289 @@
+---
+title: "Est. Espacial. Pernambuco"
+author: "Lucas Manoel"
+date: '2022-11-07'
+output:
+  beamer_presentation: default
+  ioslides_presentation: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Introdução - Sobre Pernambuco
+
+* Pernambuco é um estado do Nordeste brasileiro, tendo como limites a Paraíba, o Ceará, Alagoas, Bahia e Piauí. Possui uma área de 98.076,021 km2 e 185 municípios (IBGE, 2022), possui uma grande concentração de atividade econômica em torno de sua capital, Recife.
+* O estado de Pernambuco possui 5 mesorregiões: a Região metropolitana do Recife, a Mata Pernambucana, o Agreste Pernambucano, o Sertão Pernambucano e o São Francisco Pernambucano.
+
+## Objetivos
+
+* Identificar a divisão regional do desenvolvimento humano municipal (IDH-M) dentro do estado de Pernambuco.
+* Identificar de qual maneira se comporta os acidentes de trânsito nas rodovias federais no estado de Pernambuco.
+* Fazer o uso do Índice de Moran Global e Local para os dados de IDH-M. Para os acidentes de trânsito nas rodovias federais uma análise de processos pontuais
+
+## Sobre o Índice de Moran Global
+
+* É análogo ao coeficiente de correlação convencional;
+* Seu valor também varia de -1 até +1;
+* Valores próximos de -1 indicam uma autocorrelação negativa ou inversa;
+* Valores próximos de +1 indicam uma autocorrelação direta.
+* p-valor > 0,05 indica que essa autocorrelação é não significativa.
+
+## Sobre o Índice e Moran Local
+
+* É bom usá-lo quando lidamos com um grande número de áreas em uma região;
+* Nos dá uma indicação da homogeneidade e diversidade dos dados;
+* Tem um p-valor associado a cada região. Se p-valor > 0,05 não há autocorrelação significativa.
+
+## Sobre os processos pontuais
+
+* Trabalha com dados que possuem uma localização associada;
+* Podemos testar a relação entre esses pontos, verificando se têm um padrão sistemático ou são distribuídos aleatoriamente;
+* Nesse caso os dados usados serão de acidentes em rodovias federais do estado de Pernambuco.
+
+## Aplicação - Mapa de Pernambuco
+
+![](C:/Users/Lucas/Documents/estatistica espacial/mapa-estado-pernambuco-mesorregioes.png){width="100%"}
+
+## Aplicação Moran Global para o IDH-M
+
+* Tratando-se do IDH-M, foi obtido um I de Moran Global de 0,422 com um p-valor < 0,01;
+* Municípios com IDH-M maiores tendem a influenciar seus vizinhos de forma direta e positiva. O mesmo acontece para municípios com IDH-M baixos;
+
+## Mapa de Pernambuco subdividido por cidades e seus respectivos IDH-M
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, include=TRUE, results='hide', include=FALSE}
+require(maptools)
+require(rgdal)
+pb_meso <- readOGR("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\PEMR\\PE_Mesorregioes_2021.shp")
+pb_micro <- readOGR("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\PEMU\\PE_Municipios_2021.shp")
+shapePE <- readOGR("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\PEMU\\PE_Municipios_2021.shp")
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, include=TRUE}
+require(readxl)
+Dados_INDICE_21 <- read_excel("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\idhm_pe.xlsx")
+Dados_INDICE_21<- as.data.frame(Dados_INDICE_21)
+ind <- match(shapePE@data$NM_MUN, Dados_INDICE_21$Municipios)
+Dados_INDICE_21 <- Dados_INDICE_21[ind,]
+row.names(Dados_INDICE_21) <- row.names(shapePE)
+shapePE <- spCbind(shapePE, Dados_INDICE_21)
+shapePE$IDHM  = as.numeric(shapePE$IDHM)
+par(mar=c(0,0,0,0))
+require(classInt)
+require(RColorBrewer)
+INT1 <- classIntervals(shapePE$IDHM, n=4, style="quantile")
+COLORES1 <- brewer.pal(9, "Oranges")
+COL1 <-  findColours(INT1, COLORES1)
+
+#border=NA
+plot(shapePE, col=COL1)
+
+
+TB1 <- attr(COL1, "table")
+legtext <- paste(names(TB1))
+#local <- locator(1)
+legend(-33.06671, -7.953048, fill=attr(COL1, "palette"), legend=legtext, 
+       bty="n",cex=0.6)
+
+#-------------------------------------------------------------------
+# Concatenando o mapa das mesoregiões
+#-------------------------------------------------------------------  
+plot(pb_meso,add=TRUE,lwd=3, border='black', lty=1)
+#install.packages("raster")
+require(raster)
+#local <- locator(1)
+raster::scalebar(150, xy=c(-33.81158,-9.321465), 
+               type="bar", below="km",dist="km",dist_unit = "km",
+               cex=0.8, lonlat=T,divs=4, transform = F)
+
+#local <- locator(1)
+compassRose(-34.13823, -8.865326, cex=0.6)
+```
+
+## Índice de Moran Local
+
+```{r, warning=FALSE, message=FALSE, include=FALSE, echo=FALSE}
+require(spdep)
+set.ZeroPolicyOption(TRUE)
+```
+```{r}
+shapePE.nb1 <- poly2nb(shapePE)
+#class(shapePE.nb1)
+#shapePE.nb1[[1]]
+#shapePE.nb1[[6]]
+#shapePE@data[shapePE.nb1[[6]],5]
+
+#class(shapePE.nb1)
+
+shapePE.nb1 = poly2nb(shapePE)
+vizinhanca = nb2listw(shapePE.nb1, style="W",
+                      zero.policy=TRUE)
+shapePE.mloc1 <- localmoran(shapePE$IDHM, listw=vizinhanca,
+                            zero.policy=T, 
+                            alternative = "two.sided")
+list_w <- vizinhanca
+Sd_1 <- (shapePE$IDHM) - mean(shapePE$IDHM)
+mI_1 <- shapePE.mloc1[, 1]
+C_mI <- mI_1 - mean(mI_1)  # MAS NÃO QUEREMOS CENTRAR! Apenas o sinal importa
+quadrant <- vector(mode = "numeric", length = nrow(shapePE.mloc1))
+quadrant[Sd_1 > 0 & C_mI > 0] <- 1
+quadrant[Sd_1 < 0 & C_mI > 0] <- 4
+quadrant[Sd_1 > 0 & C_mI < 0] <- 2
+quadrant[Sd_1 < 0 & C_mI < 0] <- 3
+
+signif <- 0.05
+# places non-significant Moran's in the category '5'
+quadrant[shapePE.mloc1[, 5] > signif] <- 5
+
+
+colors <- c("red", "skyblue2", "lightpink", "blue", "white")
+
+par(mar=c(0,0,0,0))
+
+plot(shapePE, col = colors[quadrant])
+#local <- locator(1)
+legend(-33.23679, -8.324717, legend = c("alto-alto", 
+                                        "baixo-alto", "alto-baixo", "baixo-baixo","Não Sig."), 
+       fill = colors, bty = "n", cex = 0.7, y.intersp = 1, x.intersp = 1)
+
+compassRose(-34.13823, -8.665326, cex=0.5)
+
+scalebar(150, xy=c(-35.47839, -9.570783), 
+         type="bar", below="km",
+         cex=0.8, lonlat=T,divs=4)
+
+```
+
+## p-valores do I de Moran Local
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+LISA1 <- classIntervals(shapePE.mloc1[,5],style="fixed",
+                        intervalClosure = c( "right"),
+                        fixedBreaks=c(0, 0.001,0.01,0.05,by=1))
+
+colors <- c("red", "blue", "lightpink", "skyblue2", "white")
+COL_Lisa1 <- findColours(LISA1, colors)
+
+par(mar=c(0,0,0,0))
+
+plot(shapePE, col=COL_Lisa1)
+#title("LISA Map")
+TB1 <- attr(COL_Lisa1, "table")
+legtext <- paste(names(TB1))
+legend(-32.98167, -8.0882, fill=attr(COL_Lisa1, "palette"), 
+       legend=c("0.1%","1.0%","5.0%","N.sgf"), bty="n", cex=1)
+
+plot(pb_meso,add=TRUE,lwd=2)
+
+#locator(1)
+scalebar(150, xy=c(-34.47839, -9.270783), 
+         type="bar", below="km",
+         cex=0.8, lonlat=T,divs=4)
+
+compassRose(-33.69601, -7.91926, cex=0.4)
+```
+
+## Mapa de Espalhamento de Moran
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+par(mar=c(4,4,2,0.5))
+
+#xlim=c(0.48,0.76)
+
+moran.plot(shapePE$IDHM, listw=vizinhanca,zero.policy=TRUE,
+           xlab="Índice de Desenvolvimento Humano Municipal (IDH-M)",
+           ylab="Spatial Lag",xlim=c(0.4,0.8),ylim=c(0.4,0.8),
+           pch=16, col="black",cex=.5, labels=shapePE$NM_MUN, quiet=TRUE)
+```
+
+## Processos pontuais - Resultados
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+require(dplyr)
+dados <- read.csv("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\acidentes2021_todas_causas_tipos.csv", sep=";")
+dr <- subset(dados, dados[6] == "PE")
+#head(dr)
+Encoding(dr$municipio) <- "latin1"
+Encoding(dr$dia_semana) <- "latin1"
+require(rgdal)
+```
+```{r, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
+pe_mun <- readOGR("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\PEMU\\PE_Municipios_2021.shp")
+```
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+#pe <- readOGR("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\malha pe\\PE_Mun97_region.shp")
+#plot(pe_mun)
+total_ac <- c()
+for (character in pe_mun$NM_MUN) {
+  total_ac <- append(total_ac, 0)
+}
+#total_ac
+
+numero <- dr %>% group_by(municipio) %>% count()
+names(numero) <- c("municipio", "n_acidentes")
+
+i = 1
+j = 0
+for (character in toupper(pe_mun$NM_MUN)) {
+  j = j+1
+  if (character == numero$municipio[i]) {
+    total_ac[j] = numero$n_acidentes[i]
+    i=i+1
+  }
+  else {
+    total_ac[j] = 0
+  }
+}
+
+total_acd <- data.frame(total_ac,pe_mun$NM_MUN)
+names(total_acd) <- c("total_ac","Municipios")
+#total_acd
+ind <- match(pe_mun@data$NM_MUN, total_acd$Municipios)
+#ind
+total_acd <- total_acd[ind,]
+row.names(total_acd) <- row.names(pe_mun)
+require(maptools)
+pe_mun <- spCbind(pe_mun, total_acd)
+#names(pe_mun)
+#head(pe_mun@data)
+
+#min(pe_mun$total_ac)
+#max(pe_mun$total_ac)
+
+####################################################################
+# Visualizando um mapa do atributo: IDHM
+# Mapa dos quantis
+####################################################################
+pe_mun$total_ac  = as.numeric(pe_mun$total_ac)
+#shapePE$Theil  = as.numeric(shapePE$Theil)
+
+#shapePE$Gini_10  = as.numeric(shapePE$Gini_10)
+
+####################################################################
+par(mar=c(0,0,0,0))
+plot(pe_mun)
+require(spatstat)
+cupim<-ppp(dr$longitude,dr$latitude, c(-41.5,-34.5),c(-9.5,-7.45))
+plot(cupim, add=TRUE, col="red")
+plot(pb_meso,add=TRUE,lwd=2)
+lamb <- summary(cupim)$intensity
+
+scalebar(150, xy=c(-34.47839, -9.270783), 
+         type="bar", below="km",
+         cex=0.8, lonlat=T,divs=4)
+
+compassRose(-33.69601, -7.91926, cex=0.4)
+```
+
+## Processos pontuais - Resultados
+
+* Podemos notar uma concentração maior de acidentes para o Leste do estado;
+
+## Conclusões
+
+* O Índice de Moran nos mostrou que, para nosso caso, municípios tendem a ser influenciados pelo IDH de outros municípios de forma direta;
+* O Índice de Moran local nos mostrou quais são esses municípios mais influenciados ou influenciadores;
+* A mesorregião metropolitana do Recife tem o maior IDH-M. Curiosamente onde está a capital Recife;
+* Quanto aos acidentes de trânsito nas rodovias, há uma maior concentração dos acidentes para a região leste do estado.
