@@ -1,10 +1,11 @@
 ---
 title: "Est. Espacial. Pernambuco"
 author: "Lucas Manoel"
-date: '2022-11-07'
+date: 'PRESSIONAR F11 PARA TELA CHEIA'
 output:
-  beamer_presentation: default
   ioslides_presentation: default
+  beamer_presentation: default
+  slidy_presentation: default
 ---
 
 ```{r setup, include=FALSE}
@@ -51,40 +52,80 @@ knitr::opts_chunk$set(echo = FALSE)
 * Tratando-se do IDH-M, foi obtido um I de Moran Global de 0,422 com um p-valor < 0,01;
 * Municípios com IDH-M maiores tendem a influenciar seus vizinhos de forma direta e positiva. O mesmo acontece para municípios com IDH-M baixos;
 
-## Mapa de Pernambuco subdividido por cidades e seus respectivos IDH-M
+## Estatísticas descritivas sobre o IDHM
 
-```{r, echo=FALSE, warning=FALSE, message=FALSE, include=TRUE, results='hide', include=FALSE}
+```{r, echo=FALSE, warning=FALSE, message=FALSE,include=FALSE}
 require(maptools)
 require(rgdal)
+require(tibble)
 pb_meso <- readOGR("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\PEMR\\PE_Mesorregioes_2021.shp")
 pb_micro <- readOGR("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\PEMU\\PE_Municipios_2021.shp")
 shapePE <- readOGR("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\PEMU\\PE_Municipios_2021.shp")
-```
 
-```{r, echo=FALSE, warning=FALSE, message=FALSE, include=TRUE}
 require(readxl)
 Dados_INDICE_21 <- read_excel("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\idhm_pe.xlsx")
+mesor<- read.csv("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\municipiosemeso.csv", sep=";", encoding="UTF-8")
 Dados_INDICE_21<- as.data.frame(Dados_INDICE_21)
 ind <- match(shapePE@data$NM_MUN, Dados_INDICE_21$Municipios)
 Dados_INDICE_21 <- Dados_INDICE_21[ind,]
 row.names(Dados_INDICE_21) <- row.names(shapePE)
 shapePE <- spCbind(shapePE, Dados_INDICE_21)
 shapePE$IDHM  = as.numeric(shapePE$IDHM)
+shapePE$MESORREGIOES = mesor$Mesorregiao
+
+descr <- as_tibble(shapePE)
+require(dplyr)
+require(kableExtra)
+require(knitr)
+
+idhm = descr %>% summarise(Indice = "IDHM",
+                                Minimo = round(min(IDHM),3),
+                                Maximo = round(max(IDHM),3),
+                                Media = round(mean(IDHM),3),
+                                Mediana = round(median(IDHM),3))
+
+```
+
+```{r,echo=FALSE, warning=FALSE, message=FALSE}
+knitr::kable(idhm,"pipe",align = "c",
+      caption = "Estatísticas descritivas dos índices de resumo populacional dos municípios do estado de Pernambuco com base no censo de 2010")
+```
+
+## Estatísticas descritivas sobre o IDHM
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+idhm_meso <- descr %>% dplyr::select(IDHM,MESORREGIOES) %>% 
+  group_by(MESORREGIOES) %>% 
+  summarise(MINIMO = round(min(IDHM),2),
+            MAXIMO = round(max(IDHM),2),
+            MEDIA = round(mean(IDHM),2),
+            MEDIANA = round(median(IDHM),2))
+```
+
+```{r, echo=FALSE}
+kableExtra::kable(idhm_meso,"pipe", align="c", caption = "Estatísticas descritivas do IDHM por mesorregião do estado de Pernambuco")
+```
+
+
+## Mapa de Pernambuco subdividido por cidades e seus respectivos IDH-M
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, include=TRUE}
+
 par(mar=c(0,0,0,0))
 require(classInt)
 require(RColorBrewer)
-INT1 <- classIntervals(shapePE$IDHM, n=4, style="quantile")
-COLORES1 <- brewer.pal(9, "Oranges")
+INT1 <- classIntervals(shapePE$IDHM, style="fixed", fixedBreaks=c(0,0.500,0.599,0.699,0.799,1))
+COLORES1 <- c("red","darkorange","white","green","darkgreen")
 COL1 <-  findColours(INT1, COLORES1)
 
 #border=NA
 plot(shapePE, col=COL1)
 
-
 TB1 <- attr(COL1, "table")
 legtext <- paste(names(TB1))
 #local <- locator(1)
-legend(-33.06671, -7.953048, fill=attr(COL1, "palette"), legend=legtext, 
+legend(-33.06671, -7.953048, fill=attr(COL1, "palette"), legend=c("MUITO BAIXO","BAIXO","MÉDIO","ALTO","MUITO ALTO"), 
        bty="n",cex=0.6)
 
 #-------------------------------------------------------------------
@@ -101,6 +142,12 @@ raster::scalebar(150, xy=c(-33.81158,-9.321465),
 #local <- locator(1)
 compassRose(-34.13823, -8.865326, cex=0.6)
 ```
+
+## Cidades com idhm muito baixo e alto, de acordo com o PNUD Brasil.
+
+* As cidades identificadas com IDHM Alto (entre 0,7 e 0,799), do maior para o menor, são: A ilha Fernando de Noronha, Recife, Olinda, Paulista e Jaboatão dos Guararapes. Nenhuma cidade tem o IDHM considerado muito alto (maior do que 0,799).
+* A cidade de Manari tem um IDHM considerado muito baixo (menor do que 0,5), e é a única que se encontra nessa situação.
+* As demais cidades têm o IDHM considerado baixo ou médio.
 
 ## Índice de Moran Local
 
@@ -198,28 +245,48 @@ moran.plot(shapePE$IDHM, listw=vizinhanca,zero.policy=TRUE,
            pch=16, col="black",cex=.5, labels=shapePE$NM_MUN, quiet=TRUE)
 ```
 
-## Processos pontuais - Resultados
+## Processos pontuais resultados
 
 ```{r, echo=FALSE, warning=FALSE, message=FALSE}
-require(dplyr)
+require(stringr)
 dados <- read.csv("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\acidentes2021_todas_causas_tipos.csv", sep=";")
 dr <- subset(dados, dados[6] == "PE")
 #head(dr)
 Encoding(dr$municipio) <- "latin1"
 Encoding(dr$dia_semana) <- "latin1"
-require(rgdal)
+Encoding(dr$estado_fisico) <- "latin1"
+Encoding(dr$uso_solo) <- "latin1"
+Encoding(dr$classificacao_acidente) <- "latin1"
+Encoding(dr$tipo_pista) <- "latin1"
+Encoding(dr$tracado_via) <- "latin1"
+Encoding(dr$tipo_acidente) <- "latin1"
+Encoding(dr$causa_acidente) <- "latin1"
+dr$municipio <- str_replace(dr$municipio,"\xd3", "Ó")
 ```
-```{r, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
+
+```{r,echo=FALSE}
+pont_dsc <- dr %>% dplyr::select(br,mortos,municipio) %>% group_by(br) %>% 
+  summarise(Acidentes = n(),
+            `N de Fatalidades`= sum(mortos),
+            `Proporcao Fatalidades` = paste0(round(`N de Fatalidades`/sum(dr$mortos),4)*100,"%"))
+```
+
+```{r, echo=FALSE}
+kableExtra::kable(pont_dsc,align="c",caption = "Acidentes nas BR's de Pernambuco em 2021",format="html") %>% kable_styling(position="center") %>% kable_classic()
+```
+
+## Processos pontuais resultados
+
+```{r,echo=FALSE, warning=FALSE, message=FALSE, include=FALSE}
 pe_mun <- readOGR("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\PEMU\\PE_Municipios_2021.shp")
-```
-```{r, echo=FALSE, warning=FALSE, message=FALSE}
-#pe <- readOGR("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\malha pe\\PE_Mun97_region.shp")
-#plot(pe_mun)
+
+### Total de Acidentes
+
 total_ac <- c()
 for (character in pe_mun$NM_MUN) {
   total_ac <- append(total_ac, 0)
 }
-#total_ac
+
 
 numero <- dr %>% group_by(municipio) %>% count()
 names(numero) <- c("municipio", "n_acidentes")
@@ -238,7 +305,53 @@ for (character in toupper(pe_mun$NM_MUN)) {
 }
 
 total_acd <- data.frame(total_ac,pe_mun$NM_MUN)
-names(total_acd) <- c("total_ac","Municipios")
+total_acd$Mesorregioes = mesor$Mesorregiao
+
+#Total de mortes
+
+total_m <- c()
+for (character in pe_mun$NM_MUN) {
+  total_m <- append(total_m, 0)
+}
+
+numerom <- dr %>% dplyr::select(municipio,mortos) %>% group_by(municipio) %>% 
+  summarise(Acidentes = sum(mortos))
+names(numerom) <- c("municipio","n_mortos")
+i = 1
+j = 0
+for (character in toupper(pe_mun$NM_MUN)) {
+  j = j+1
+  if (character == numerom$municipio[i]) {
+    total_m[j] = numerom$n_mortos[i]
+    i=i+1
+  }
+  else {
+    total_m[j] = 0
+  }
+}
+total_acd$mortos <- total_m
+total_acd <- as.data.frame(total_acd)
+names(total_acd) <- c("total_ac","Municipios","Mesorregioes","mortos")
+acd_meso <- total_acd %>% dplyr::select(total_ac,mortos,Municipios, Mesorregioes) %>% group_by(Mesorregioes) %>% 
+  summarise(`Total Acidentes` = sum(total_ac),
+            `N Fatalidades` = sum(mortos),
+            `P Fatalidade` = paste0(round(`N Fatalidades`/sum(dr$mortos),4)*100,"%"),
+            `P Fatalidades/Acidentes` = paste0(round(sum(mortos)/sum(total_ac),4)*100,"%")
+            )
+```
+
+```{r}
+kableExtra::kable(acd_meso,align="c",caption = "Acidentes nas Mesorregioes de Pernambuco em 2021",format="html") %>% kable_styling(position="center") %>% kable_classic()
+```
+
+
+## Processos pontuais resultados
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+#pe <- readOGR("C:\\Users\\Lucas\\Documents\\estatistica espacial\\malha pernambuco\\malha pe\\PE_Mun97_region.shp")
+#plot(pe_mun)
+
 #total_acd
 ind <- match(pe_mun@data$NM_MUN, total_acd$Municipios)
 #ind
@@ -266,24 +379,27 @@ par(mar=c(0,0,0,0))
 plot(pe_mun)
 require(spatstat)
 cupim<-ppp(dr$longitude,dr$latitude, c(-41.5,-34.5),c(-9.5,-7.45))
-plot(cupim, add=TRUE, col="red")
+plot(cupim, add=TRUE, col="red", pch=16,lwd=1)
 plot(pb_meso,add=TRUE,lwd=2)
 lamb <- summary(cupim)$intensity
 
-scalebar(150, xy=c(-34.47839, -9.270783), 
+raster::scalebar(150, xy=c(-34.47839, -9.270783), 
          type="bar", below="km",
          cex=0.8, lonlat=T,divs=4)
 
 compassRose(-33.69601, -7.91926, cex=0.4)
+
+legend(-34.75,-8.35, fill=c("red"), legend=c("ACIDENTE"),bty="n",cex=1)
 ```
-
-## Processos pontuais - Resultados
-
-* Podemos notar uma concentração maior de acidentes para o Leste do estado;
 
 ## Conclusões
 
 * O Índice de Moran nos mostrou que, para nosso caso, municípios tendem a ser influenciados pelo IDH de outros municípios de forma direta;
 * O Índice de Moran local nos mostrou quais são esses municípios mais influenciados ou influenciadores;
-* A mesorregião metropolitana do Recife tem o maior IDH-M. Curiosamente onde está a capital Recife;
-* Quanto aos acidentes de trânsito nas rodovias, há uma maior concentração dos acidentes para a região leste do estado.
+* A mesorregião Metropolitana do Recife tem a maior média de IDHM (0,63) e a Mesorregião do Agreste Pernambucano a menor média de IDHM (0,58)
+* A Mesorregião Metropolitana do Recife tem maior média de IDHM possivelmente por influência de sua capital Recife, que concentra grande parte das atividades econômicas do estado.
+
+## Conclusões
+
+* Quanto aos acidentes de trânsito nas rodovias, o Agreste Pernambucano tem a maior Proporção de Fatalidades por acidentes (10,2% dos acidentes acabam em morte), além de que 58,91% das fatalidades do estado de Pernambuco ocorrem nesta mesma mesorregião.
+* A Mesorregião com a menor Proporção de Fatalidades por acidente é a Metropolitana do Recife, ou seja, de todos os acidentes ocorridos nesta mesorregião, apenas 4,19% acabam em fatalidades.
